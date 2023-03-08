@@ -8,10 +8,12 @@
 install.packages("tidyverse")
 install.packages("lubridate")
 install.packages("ggplot")
+install.packages("formattable")
 
 library(tidyverse)
 library(lubridate)
 library(ggplot2)
+library(formattable)
 getwd()
 setwd("C:/Users/Scott/OneDrive/Documents/Data Analysis Course Materials/Projects/Google Course Capstone Project/Trip Data CSV")
 
@@ -86,6 +88,9 @@ all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
 all_trips$ended_at <- as.POSIXct(all_trips$ended_at, format = "%m/%d/%Y %H:%M")
 all_trips$started_at <- as.POSIXct(all_trips$started_at, format = "%m/%d/%Y %H:%M")
 
+# Adding a Weekday column for visualizations
+all_trips$weekday <- wday(all_trips$started_at, label=TRUE)
+
 # Calculating the ride_length column by subtracting started_at from ended_at
 all_trips$ride_length <- difftime(all_trips$ended_at,all_trips$started_at)
 
@@ -125,13 +130,14 @@ aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$d
 all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
 aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
 
-# Analyzing ridership data by type and weekday
+# Analyzing Percentage of Riders by Day of Week for Member vs. Casual Riders
 all_trips_v2 %>% 
-  mutate(weekday = wday(started_at, label = TRUE)) %>% #creates weekday field using wday()
-  group_by(member_casual, weekday) %>% #groups by usertype and weekday
-  summarise(number_of_rides = n() #calculates the number of rides and average duration 
-  ,average_duration = mean(ride_length)) %>% # calculates the average duration
-  arrange(member_casual, weekday) # sorts
+  group_by(member_casual, day_of_week) %>%
+  summarise(number_of_rides = n(), average_duration = mean(ride_length))%>%
+  mutate(freq = formattable::percent(number_of_rides/sum(number_of_rides)*100))%>%
+  arrange(member_casual, day_of_week)%>%
+  ggplot(aes(x=day_of_week, y=freq, fill=member_casual))+geom_col(position = "dodge") + labs(title = "% of Rides between Member vs. Casual", x=NULL)
+  
 
 # Creating a visualization based on the number of rides by rider type
 all_trips_v2 %>% 
@@ -153,6 +159,28 @@ all_trips_v2 %>%
   ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
   geom_col(position = "dodge")
 
+
+# Average Duration between Bike Type
+all_trips_v2 %>%
+  group_by(rideable_type, day_of_week)%>%
+  summarise(number_of_rides = n(), average_duration = mean(ride_length))%>%
+  arrange(rideable_type, day_of_week)%>%
+  ggplot(aes(x=day_of_week, y=average_duration, fill=rideable_type))+
+  geom_col(position = "dodge")+
+  labs(title = "Average Duration (mins) between Bike Type", x=NULL)
+
+# Percent of Bike Type used by Member vs. Casual
+all_trips_v2 %>%
+  group_by(rideable_type, member_casual) %>%
+  summarise(number_of_type = n()) %>%
+  mutate(freq = formattable::percent(number_of_type/sum(number_of_type)*100)) %>%
+  arrange(member_casual, rideable_type)%>%
+  ggplot(aes(x=rideable_type, y=freq, fill=member_casual))+
+  geom_col(position = "dodge")+
+  labs(title = "% of Bike Type Used by Member vs. Casual", x=NULL)
+
+
 # Exporting data to create more visualizations using Tableau
 counts <- aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
 write.csv(counts, file = "C:/Users/Scott/OneDrive/Documents/Data Analysis Course Materials/Projects/Google Course Capstone Project/avg_ride_length.csv")
+write.csv(all_trips_v2, file = "C:/Users/Scott/OneDrive/Documents/Data Analysis Course Materials/Projects/Google Course Capstone Project/all_rides.csv")
